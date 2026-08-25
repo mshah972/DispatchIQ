@@ -1,0 +1,18 @@
+# CMake and compiled output
+/build/
+/cmake-build-*/
+compile_commands.json
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Editors and operating systems
+.DS_Store
+.idea/
+.vscode/
+*.swp
