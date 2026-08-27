@@ -7,14 +7,18 @@ management, reporting, and undo support.
 
 ## Current status
 
-Milestone **DIQ-001: Incident Registry MVP** is implemented. The current command-line demo can:
+Milestones **DIQ-001: Incident Registry MVP** and **DIQ-002: Emergency Call Intake** are
+implemented. The current command-line demo can:
 
 - represent incident coordinates with `std::pair<double, double>`;
 - preserve incident arrival order in `std::vector<Incident>`;
 - accept incidents whose severity is between 1 and 5;
 - reject duplicate incident IDs;
-- locate an incident with a linear ID search; and
-- print accepted incidents and handle an empty registry.
+- locate an incident with a linear ID search;
+- print accepted incidents and handle an empty registry;
+- accept validated emergency calls into a `std::queue`;
+- inspect the oldest pending call without removing it; and
+- process calls in first-in, first-out order while handling an empty queue safely.
 
 The program is currently a deterministic demonstration harness. Interactive input, persistence,
 and automated tests are planned for later milestones.
@@ -50,7 +54,7 @@ If CMake is not available on the command line:
 mkdir -p build
 clang++ -std=c++20 -Wall -Wextra -Wpedantic \
     -Iinclude \
-    src/main.cpp src/incident.cpp \
+    src/main.cpp src/incident.cpp src/emergency_call.cpp \
     -o build/dispatchiq
 ./build/dispatchiq
 ```
@@ -67,6 +71,26 @@ Incident 1003 rejected.
 1002. Medical - 4 - (32.7767, -96.797)
 Incident 1002 found.
 Incident 9999 not found.
+
+=======EMERGENCY CALL INTAKE=======
+
+Initial count test passed: expected 0, received 0.
+Peek test passed: queue is empty.
+Enqueue 2001 accepted.
+Enqueue 2002 accepted.
+Enqueue 2003 accepted.
+Enqueue 2004 rejected.
+Pending calls test passed.
+Front of queue test passed.
+Pending calls test after peek passed.
+FIFO test passed for call 2001.
+Queue-size test passed: 2 call(s) remaining.
+FIFO test passed for call 2002.
+Queue-size test passed: 1 call(s) remaining.
+FIFO test passed for call 2003.
+Queue-size test passed: 0 call(s) remaining.
+DIQ-002 FIFO processing test passed.
+Empty-queue processing test passed.
 ```
 
 ## Project layout
@@ -81,10 +105,12 @@ DispatchIQ/
 │   ├── learning-roadmap.md     # Milestone sequence
 │   └── milestones/             # Completed work records
 ├── include/dispatchiq/
-│   └── incident.hpp            # Incident model and public operations
+│   ├── emergency_call.hpp       # Emergency-call model and queue operations
+│   └── incident.hpp             # Incident model and public operations
 ├── src/
-│   ├── incident.cpp            # Incident registry implementation
-│   └── main.cpp                # Current demonstration program
+│   ├── emergency_call.cpp       # FIFO intake implementation
+│   ├── incident.cpp             # Incident registry implementation
+│   └── main.cpp                 # Current demonstration program
 └── tests/                      # Future automated tests
 ```
 
@@ -94,8 +120,8 @@ DispatchIQ/
 |---|---|---|
 | `std::pair` | Latitude and longitude | Implemented |
 | `std::vector` | Incident history in arrival order | Implemented |
-| `std::queue` | FIFO emergency-call intake | Next |
-| `std::priority_queue` | Severity-based triage | Planned |
+| `std::queue` | FIFO emergency-call intake | Implemented |
+| `std::priority_queue` | Severity-based triage | Next |
 | `std::unordered_map` | Fast lookup by incident or responder ID | Planned |
 | `std::unordered_set` | Duplicate-event detection | Planned |
 | `std::map` | Ordered operational reports | Planned |
@@ -108,11 +134,13 @@ DispatchIQ/
 - [Architecture and design decisions](docs/architecture.md)
 - [Learning roadmap](docs/learning-roadmap.md)
 - [DIQ-001 milestone record](docs/milestones/DIQ-001-incident-registry.md)
+- [DIQ-002 milestone record](docs/milestones/DIQ-002-emergency-call-intake.md)
 
 ## Current limitations
 
 - Records exist only for the lifetime of the process.
 - Duplicate detection and ID lookup are linear-time operations.
+- Duplicate emergency-call IDs are not yet detected.
 - Latitude and longitude ranges are not yet validated.
-- `addIncident` reports success or failure but not the precise rejection reason.
+- `addIncident` and `enqueueCall` report success or failure but not the precise rejection reason.
 - Verification is currently manual; automated tests have not yet been added.
