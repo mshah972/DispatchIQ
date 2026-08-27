@@ -13,6 +13,8 @@ add_executable(dispatchiq
     src/main.cpp
         include/dispatchiq/incident.hpp
         src/incident.cpp
+        include/dispatchiq/emergency_call.hpp
+        src/emergency_call.cpp
 )
 
 target_compile_features(dispatchiq PRIVATE cxx_std_20)
