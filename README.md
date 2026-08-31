@@ -7,8 +7,8 @@ management, reporting, and undo support.
 
 ## Current status
 
-Milestones **DIQ-001: Incident Registry MVP** and **DIQ-002: Emergency Call Intake** are
-implemented. The current command-line demo can:
+Milestones **DIQ-001: Incident Registry MVP**, **DIQ-002: Emergency Call Intake**, and
+**DIQ-003: Incident Triage** are implemented. The project can:
 
 - represent incident coordinates with `std::pair<double, double>`;
 - preserve incident arrival order in `std::vector<Incident>`;
@@ -18,10 +18,13 @@ implemented. The current command-line demo can:
 - print accepted incidents and handle an empty registry;
 - accept validated emergency calls into a `std::queue`;
 - inspect the oldest pending call without removing it; and
-- process calls in first-in, first-out order while handling an empty queue safely.
+- process calls in first-in, first-out order while handling an empty queue safely;
+- prioritize incidents by severity with a `std::priority_queue`;
+- preserve arrival order when incidents have equal severity; and
+- safely peek, dispatch, and count prioritized incidents.
 
-The program is currently a deterministic demonstration harness. Interactive input, persistence,
-and automated tests are planned for later milestones.
+The command-line program is currently a deterministic DIQ-003 acceptance harness. Interactive
+input, persistence, and automated tests are planned for later milestones.
 
 ## Requirements
 
@@ -54,7 +57,7 @@ If CMake is not available on the command line:
 mkdir -p build
 clang++ -std=c++20 -Wall -Wextra -Wpedantic \
     -Iinclude \
-    src/main.cpp src/incident.cpp src/emergency_call.cpp \
+    src/main.cpp src/incident.cpp src/emergency_call.cpp src/incident_triage.cpp \
     -o build/dispatchiq
 ./build/dispatchiq
 ```
@@ -62,35 +65,25 @@ clang++ -std=c++20 -Wall -Wextra -Wpedantic \
 ## Example output
 
 ```text
-No incidents have been recorded.
-Incident 1001 accepted.
-Incident 1002 accepted.
-Incident 1001 rejected.
-Incident 1003 rejected.
-1001. Fire - 5 - (29.7604, -95.3698)
-1002. Medical - 4 - (32.7767, -96.797)
-Incident 1002 found.
-Incident 9999 not found.
+=======INCIDENT TRIAGE=======
 
-=======EMERGENCY CALL INTAKE=======
+Initial count test passed.
+Highest-priority peek test passed.
+Incident 3001 was accepted.
+Incident 3002 was accepted.
+Incident 3003 was accepted.
+Incident 3004 was accepted.
+Incident 3005 was rejected.
+Insertion count test passed.
+Arrival-sequence test passed.
+Highest-priority incident test passed.
+Peek count test passed.
+Dispatch priority test passed.
+Final empty-state test passed.
+Final peek test passed.
+Final dispatch test passed.
 
-Initial count test passed: expected 0, received 0.
-Peek test passed: queue is empty.
-Enqueue 2001 accepted.
-Enqueue 2002 accepted.
-Enqueue 2003 accepted.
-Enqueue 2004 rejected.
-Pending calls test passed.
-Front of queue test passed.
-Pending calls test after peek passed.
-FIFO test passed for call 2001.
-Queue-size test passed: 2 call(s) remaining.
-FIFO test passed for call 2002.
-Queue-size test passed: 1 call(s) remaining.
-FIFO test passed for call 2003.
-Queue-size test passed: 0 call(s) remaining.
-DIQ-002 FIFO processing test passed.
-Empty-queue processing test passed.
+DIQ-003 incident triage tests passed.
 ```
 
 ## Project layout
@@ -106,11 +99,13 @@ DispatchIQ/
 │   └── milestones/             # Completed work records
 ├── include/dispatchiq/
 │   ├── emergency_call.hpp       # Emergency-call model and queue operations
-│   └── incident.hpp             # Incident model and public operations
+│   ├── incident.hpp             # Incident model and public operations
+│   └── incident_triage.hpp      # Priority-triage model and operation contracts
 ├── src/
 │   ├── emergency_call.cpp       # FIFO intake implementation
 │   ├── incident.cpp             # Incident registry implementation
-│   └── main.cpp                 # Current demonstration program
+│   ├── incident_triage.cpp      # Severity and arrival-order triage
+│   └── main.cpp                 # Current DIQ-003 acceptance harness
 └── tests/                      # Future automated tests
 ```
 
@@ -121,8 +116,8 @@ DispatchIQ/
 | `std::pair` | Latitude and longitude | Implemented |
 | `std::vector` | Incident history in arrival order | Implemented |
 | `std::queue` | FIFO emergency-call intake | Implemented |
-| `std::priority_queue` | Severity-based triage | Next |
-| `std::unordered_map` | Fast lookup by incident or responder ID | Planned |
+| `std::priority_queue` | Severity-based triage | Implemented |
+| `std::unordered_map` | Fast lookup by incident or responder ID | Next |
 | `std::unordered_set` | Duplicate-event detection | Planned |
 | `std::map` | Ordered operational reports | Planned |
 | `std::set` | Sorted unique skills and service regions | Planned |
@@ -135,12 +130,14 @@ DispatchIQ/
 - [Learning roadmap](docs/learning-roadmap.md)
 - [DIQ-001 milestone record](docs/milestones/DIQ-001-incident-registry.md)
 - [DIQ-002 milestone record](docs/milestones/DIQ-002-emergency-call-intake.md)
+- [DIQ-003 milestone record](docs/milestones/DIQ-003-incident-triage.md)
 
 ## Current limitations
 
 - Records exist only for the lifetime of the process.
 - Duplicate detection and ID lookup are linear-time operations.
 - Duplicate emergency-call IDs are not yet detected.
+- Duplicate IDs are not yet detected when incidents enter triage.
 - Latitude and longitude ranges are not yet validated.
-- `addIncident` and `enqueueCall` report success or failure but not the precise rejection reason.
+- Validation operations report success or failure but not the precise rejection reason.
 - Verification is currently manual; automated tests have not yet been added.
