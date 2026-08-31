@@ -11,10 +11,12 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_executable(dispatchiq
     src/main.cpp
-        include/dispatchiq/incident.hpp
-        src/incident.cpp
-        include/dispatchiq/emergency_call.hpp
-        src/emergency_call.cpp
+    include/dispatchiq/incident.hpp
+    src/incident.cpp
+    include/dispatchiq/emergency_call.hpp
+    src/emergency_call.cpp
+    include/dispatchiq/incident_triage.hpp
+    src/incident_triage.cpp
 )
 
 target_compile_features(dispatchiq PRIVATE cxx_std_20)

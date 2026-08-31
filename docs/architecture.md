@@ -7,16 +7,20 @@ data-structure choice. It should evolve with the implementation.
 
 ```text
 main.cpp
-  ├── creates demonstration incidents and emergency calls
+  ├── creates deterministic triage scenarios
   ├── reports operation results
-  ├── calls incident registry operations ──► std::vector<Incident>
-  └── calls emergency intake operations ──► std::queue<EmergencyCall>
+  └── calls incident triage operations ──► IncidentTriage
+                                              │
+                                              ▼
+                              std::priority_queue<TriageEntry>
 ```
 
 - `include/dispatchiq/incident.hpp` defines the `Incident` model and public operation contracts.
 - `src/incident.cpp` owns validation, duplicate checking, searching, and registry presentation.
 - `include/dispatchiq/emergency_call.hpp` defines the intake model and queue-operation contracts.
 - `src/emergency_call.cpp` owns call validation, FIFO insertion, peeking, processing, and counting.
+- `include/dispatchiq/incident_triage.hpp` defines triage entries, ordering, state, and contracts.
+- `src/incident_triage.cpp` owns severity ordering, arrival tie-breaking, peeking, and dispatching.
 - `src/main.cpp` composes those operations into a deterministic acceptance scenario.
 - All project-owned types and operations live in the `dispatchiq` namespace.
 
@@ -114,19 +118,55 @@ The intake functions reject severities outside 1 through 5 and leave the queue u
 rejection. Duplicate call IDs are intentionally deferred until the `std::unordered_set` milestone
 because a queue does not provide a natural search operation.
 
+## Incident triage
+
+Accepted incidents enter an `IncidentTriage` state containing a priority queue and the next
+arrival sequence number. Each `TriageEntry` combines the original `Incident` with the sequence
+assigned when it entered triage.
+
+### Container decision: `std::priority_queue`
+
+Triage must expose the most operationally urgent incident without sorting the entire collection
+after every insertion. A `std::priority_queue` maintains the highest-priority entry at `top()`
+while supporting logarithmic insertion and removal.
+
+The `IncidentPriority` comparator applies two ordering rules:
+
+1. Higher severity has higher priority.
+2. Equal severities are ordered by smaller arrival sequence, preserving first-arrived-first-out
+   behavior within the severity level.
+
+The comparator returns `true` when its left operand has lower priority than its right operand.
+This inverted-looking contract is required by `std::priority_queue`.
+
+| Operation | Complexity | Behavior |
+|---|---:|---|
+| Add valid incident | O(log n) | Assigns a sequence and restores heap order |
+| Peek highest priority | O(1) | Reads `top()` without removal |
+| Dispatch highest priority | O(log n) | Copies and removes `top()` |
+| Count pending incidents | O(1) | Returns the priority queue size |
+
+Severity validation occurs before insertion. Rejected incidents leave both the queue and arrival
+counter unchanged, so accepted sequence numbers remain contiguous. Sequence numbers are
+monotonic and are not reused after dispatch.
+
+`peekHighestPriorityIncident` returns a non-owning pointer to the incident inside the top entry.
+Any priority-queue mutation can reorder or reallocate storage, so the pointer must not be used
+after adding or dispatching an incident or after the triage state is destroyed.
+
 ## Validation and error reporting
 
-The current milestones validate incident and call severity plus incident ID uniqueness. Coordinate
-bounds, emergency-call ID uniqueness, and category rules are not yet enforced. Boolean results
-keep the first APIs simple but cannot distinguish rejection reasons. A later milestone can
-introduce result enums without coupling domain logic to console output.
+The current milestones validate registry incidents, emergency calls, and triage incidents by
+severity, plus incident registry ID uniqueness. Coordinate bounds, emergency-call and triage ID
+uniqueness, and category rules are not yet enforced. Boolean results keep the first APIs simple
+but cannot distinguish rejection reasons. A later milestone can introduce result enums without
+coupling domain logic to console output.
 
 ## Growth path
 
 The architecture will expand one behavior at a time:
 
-1. `std::priority_queue` will prioritize accepted incidents by severity and arrival time.
-2. Hash-based indexes will provide average constant-time lookup and duplicate detection.
-3. Ordered containers will support stable operational reports.
-4. `std::list` will support frequently edited routes, and `std::stack` will support undo.
-5. Persistence, automated tests, and benchmarks will harden the completed simulator.
+1. Hash-based indexes will provide average constant-time lookup and duplicate detection.
+2. Ordered containers will support stable operational reports.
+3. `std::list` will support frequently edited routes, and `std::stack` will support undo.
+4. Persistence, automated tests, and benchmarks will harden the completed simulator.

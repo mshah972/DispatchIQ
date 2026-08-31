@@ -16,8 +16,8 @@ refactoring when a new requirement makes another data structure appropriate.
 |---|---|---|---|
 | DIQ-001 | Incident Registry MVP | `std::pair`, `std::vector`, linear search, pointers | Implemented |
 | DIQ-002 | Emergency Call Intake | `std::queue`, FIFO behavior | Implemented |
-| DIQ-003 | Incident Triage | `std::priority_queue`, custom comparator | Next |
-| DIQ-004 | Fast Incident Index | `std::unordered_map`, hash lookup | Planned |
+| DIQ-003 | Incident Triage | `std::priority_queue`, custom comparator | Implemented |
+| DIQ-004 | Fast Incident Index | `std::unordered_map`, hash lookup | Next |
 | DIQ-005 | Event Deduplication | `std::unordered_set`, uniqueness | Planned |
 | DIQ-006 | Ordered Operations Report | `std::map`, `std::set`, ordering | Planned |
 | DIQ-007 | Responder Route Editing | `std::list`, iterators, insertion and erasure | Planned |
