@@ -17,6 +17,8 @@ add_executable(dispatchiq
     src/emergency_call.cpp
     include/dispatchiq/incident_triage.hpp
     src/incident_triage.cpp
+    include/dispatchiq/incident_index.hpp
+    src/incident_index.cpp
 )
 
 target_compile_features(dispatchiq PRIVATE cxx_std_20)

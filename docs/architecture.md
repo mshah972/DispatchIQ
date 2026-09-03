@@ -7,12 +7,12 @@ data-structure choice. It should evolve with the implementation.
 
 ```text
 main.cpp
-  ├── creates deterministic triage scenarios
+  ├── creates deterministic incident-index scenarios
   ├── reports operation results
-  └── calls incident triage operations ──► IncidentTriage
+  └── calls incident-index operations ──► IncidentIndex
                                               │
                                               ▼
-                              std::priority_queue<TriageEntry>
+                              std::unordered_map<int, Incident>
 ```
 
 - `include/dispatchiq/incident.hpp` defines the `Incident` model and public operation contracts.
@@ -21,6 +21,8 @@ main.cpp
 - `src/emergency_call.cpp` owns call validation, FIFO insertion, peeking, processing, and counting.
 - `include/dispatchiq/incident_triage.hpp` defines triage entries, ordering, state, and contracts.
 - `src/incident_triage.cpp` owns severity ordering, arrival tie-breaking, peeking, and dispatching.
+- `include/dispatchiq/incident_index.hpp` defines the active incident index and its contracts.
+- `src/incident_index.cpp` owns hash-based insertion, lookup, removal, and counting.
 - `src/main.cpp` composes those operations into a deterministic acceptance scenario.
 - All project-owned types and operations live in the `dispatchiq` namespace.
 
@@ -48,8 +50,8 @@ The first registry uses `std::vector<Incident>` because it:
 - supports amortized constant-time insertion at the end; and
 - is a strong default container for a small, read-heavy sequence.
 
-The current trade-off is linear duplicate detection and linear ID lookup. This is acceptable for
-the learning MVP and creates a measurable baseline for a later `std::unordered_map` index.
+The current trade-off is linear duplicate detection and linear ID lookup. This remains a useful
+baseline for comparing the `std::unordered_map` index introduced in DIQ-004.
 
 ### Complexity
 
@@ -154,19 +156,57 @@ monotonic and are not reused after dispatch.
 Any priority-queue mutation can reorder or reallocate storage, so the pointer must not be used
 after adding or dispatching an incident or after the triage state is destroyed.
 
+## Fast incident index
+
+The active incident index owns incidents in an
+`std::unordered_map<int, Incident>`. Each incident ID is both the uniqueness boundary and the
+hash-table key. This provides direct access by ID without scanning the insertion-order registry.
+
+### Container decision: `std::unordered_map`
+
+The index uses `std::unordered_map` because it:
+
+- associates each unique integer ID with one complete incident;
+- detects duplicate keys during insertion without a separate scan;
+- supports average constant-time insertion, lookup, and removal; and
+- does not impose an ordering cost that the lookup workflow does not require.
+
+Hash-table iteration order is unspecified. Ordered displays must continue to use an ordered
+sequence or a later reporting container rather than depending on the index's iteration order.
+
+| Operation | Average | Worst case | Behavior |
+|---|---:|---:|---|
+| Add valid incident | O(1) | O(n) | Uses `emplace`; duplicate keys leave existing data unchanged |
+| Find by ID | O(1) | O(n) | Returns a pointer to the mapped incident or `nullptr` |
+| Remove by ID | O(1) | O(n) | Erases one matching key and reports whether it existed |
+| Count indexed incidents | O(1) | O(1) | Returns the hash table size |
+
+`addIncidentToIndex` validates severity before insertion. A severity outside 1 through 5 or an
+existing ID returns `false` without modifying the index. Removing a missing ID also returns
+`false` and leaves the index unchanged.
+
+`findIncidentInIndexById` returns a non-owning pointer to the mapped incident. Rehashing
+invalidates iterators but does not invalidate pointers or references to stored elements. The
+pointer becomes invalid when its incident is erased, the index is cleared or destroyed, or the
+map is replaced.
+
+The index currently owns copies independently from the vector registry and priority triage.
+Coordinating those views behind one workflow is deferred until the application layer is expanded.
+
 ## Validation and error reporting
 
-The current milestones validate registry incidents, emergency calls, and triage incidents by
-severity, plus incident registry ID uniqueness. Coordinate bounds, emergency-call and triage ID
-uniqueness, and category rules are not yet enforced. Boolean results keep the first APIs simple
-but cannot distinguish rejection reasons. A later milestone can introduce result enums without
-coupling domain logic to console output.
+The current milestones validate registry incidents, indexed incidents, emergency calls, and
+triage incidents by severity. The vector registry and hash index also enforce incident ID
+uniqueness. Coordinate bounds, emergency-call and triage ID uniqueness, and category rules are
+not yet enforced. Boolean results keep the first APIs simple but cannot distinguish rejection
+reasons. A later milestone can introduce result enums without coupling domain logic to console
+output.
 
 ## Growth path
 
 The architecture will expand one behavior at a time:
 
-1. Hash-based indexes will provide average constant-time lookup and duplicate detection.
+1. Hash-based sets will detect repeated intake events.
 2. Ordered containers will support stable operational reports.
 3. `std::list` will support frequently edited routes, and `std::stack` will support undo.
 4. Persistence, automated tests, and benchmarks will harden the completed simulator.

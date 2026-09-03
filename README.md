@@ -7,8 +7,9 @@ management, reporting, and undo support.
 
 ## Current status
 
-Milestones **DIQ-001: Incident Registry MVP**, **DIQ-002: Emergency Call Intake**, and
-**DIQ-003: Incident Triage** are implemented. The project can:
+Milestones **DIQ-001: Incident Registry MVP**, **DIQ-002: Emergency Call Intake**,
+**DIQ-003: Incident Triage**, and **DIQ-004: Fast Incident Index** are implemented. The project
+can:
 
 - represent incident coordinates with `std::pair<double, double>`;
 - preserve incident arrival order in `std::vector<Incident>`;
@@ -17,13 +18,16 @@ Milestones **DIQ-001: Incident Registry MVP**, **DIQ-002: Emergency Call Intake*
 - locate an incident with a linear ID search;
 - print accepted incidents and handle an empty registry;
 - accept validated emergency calls into a `std::queue`;
-- inspect the oldest pending call without removing it; and
+- inspect the oldest pending call without removing it;
 - process calls in first-in, first-out order while handling an empty queue safely;
 - prioritize incidents by severity with a `std::priority_queue`;
-- preserve arrival order when incidents have equal severity; and
-- safely peek, dispatch, and count prioritized incidents.
+- preserve arrival order when incidents have equal severity;
+- safely peek, dispatch, and count prioritized incidents;
+- index active incidents by ID with `std::unordered_map<int, Incident>`;
+- reject duplicate index entries without overwriting the original incident; and
+- find and remove indexed incidents with average constant-time operations.
 
-The command-line program is currently a deterministic DIQ-003 acceptance harness. Interactive
+The command-line program is currently a deterministic DIQ-004 acceptance harness. Interactive
 input, persistence, and automated tests are planned for later milestones.
 
 ## Requirements
@@ -58,6 +62,7 @@ mkdir -p build
 clang++ -std=c++20 -Wall -Wextra -Wpedantic \
     -Iinclude \
     src/main.cpp src/incident.cpp src/emergency_call.cpp src/incident_triage.cpp \
+    src/incident_index.cpp \
     -o build/dispatchiq
 ./build/dispatchiq
 ```
@@ -65,25 +70,28 @@ clang++ -std=c++20 -Wall -Wextra -Wpedantic \
 ## Example output
 
 ```text
-=======INCIDENT TRIAGE=======
+=======FAST INCIDENT INDEX=======
 
 Initial count test passed.
-Highest-priority peek test passed.
-Incident 3001 was accepted.
-Incident 3002 was accepted.
-Incident 3003 was accepted.
-Incident 3004 was accepted.
-Incident 3005 was rejected.
+Empty-index lookup test passed.
+Incident 4001 accepted.
+Incident 4002 accepted.
+Incident 4003 accepted.
+Duplicate incident 4001 was rejected as expected.
+Invalid incident 4004 was rejected as expected.
 Insertion count test passed.
-Arrival-sequence test passed.
-Highest-priority incident test passed.
-Peek count test passed.
-Dispatch priority test passed.
-Final empty-state test passed.
-Final peek test passed.
-Final dispatch test passed.
+Existing incident lookup test passed.
+Missing incident lookup test passed.
+Duplicate protection test passed.
+Existing incident removal test passed.
+Post-removal count test passed.
+Post-removal lookup test passed.
+Missing incident removal test passed.
+Missing-removal count test passed.
+Reinsertion test passed.
+Final count test passed.
 
-DIQ-003 incident triage tests passed.
+DIQ-004 fast incident index tests passed.
 ```
 
 ## Project layout
@@ -99,13 +107,15 @@ DispatchIQ/
 │   └── milestones/             # Completed work records
 ├── include/dispatchiq/
 │   ├── emergency_call.hpp       # Emergency-call model and queue operations
+│   ├── incident_index.hpp       # Hash index model and operation contracts
 │   ├── incident.hpp             # Incident model and public operations
 │   └── incident_triage.hpp      # Priority-triage model and operation contracts
 ├── src/
 │   ├── emergency_call.cpp       # FIFO intake implementation
+│   ├── incident_index.cpp       # Hash-based incident lookup and removal
 │   ├── incident.cpp             # Incident registry implementation
 │   ├── incident_triage.cpp      # Severity and arrival-order triage
-│   └── main.cpp                 # Current DIQ-003 acceptance harness
+│   └── main.cpp                 # Current DIQ-004 acceptance harness
 └── tests/                      # Future automated tests
 ```
 
@@ -117,8 +127,8 @@ DispatchIQ/
 | `std::vector` | Incident history in arrival order | Implemented |
 | `std::queue` | FIFO emergency-call intake | Implemented |
 | `std::priority_queue` | Severity-based triage | Implemented |
-| `std::unordered_map` | Fast lookup by incident or responder ID | Next |
-| `std::unordered_set` | Duplicate-event detection | Planned |
+| `std::unordered_map` | Fast lookup by incident or responder ID | Implemented |
+| `std::unordered_set` | Duplicate-event detection | Next |
 | `std::map` | Ordered operational reports | Planned |
 | `std::set` | Sorted unique skills and service regions | Planned |
 | `std::list` | Frequently edited route stops | Planned |
@@ -131,13 +141,18 @@ DispatchIQ/
 - [DIQ-001 milestone record](docs/milestones/DIQ-001-incident-registry.md)
 - [DIQ-002 milestone record](docs/milestones/DIQ-002-emergency-call-intake.md)
 - [DIQ-003 milestone record](docs/milestones/DIQ-003-incident-triage.md)
+- [DIQ-004 milestone record](docs/milestones/DIQ-004-fast-incident-index.md)
 
 ## Current limitations
 
 - Records exist only for the lifetime of the process.
-- Duplicate detection and ID lookup are linear-time operations.
+- The original vector registry still uses linear duplicate detection and lookup; the active
+  incident index provides average constant-time alternatives.
 - Duplicate emergency-call IDs are not yet detected.
 - Duplicate IDs are not yet detected when incidents enter triage.
+- Indexed incidents are independent copies, so synchronization with the registry and triage is
+  not yet coordinated by a single workflow.
+- Hash-table iteration order is intentionally unspecified and must not be used for reporting.
 - Latitude and longitude ranges are not yet validated.
 - Validation operations report success or failure but not the precise rejection reason.
 - Verification is currently manual; automated tests have not yet been added.
