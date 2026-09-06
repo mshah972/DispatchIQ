@@ -19,6 +19,8 @@ add_executable(dispatchiq
     src/incident_triage.cpp
     include/dispatchiq/incident_index.hpp
     src/incident_index.cpp
+    include/dispatchiq/event_deduplicator.hpp
+    src/event_deduplicator.cpp
 )
 
 target_compile_features(dispatchiq PRIVATE cxx_std_20)
