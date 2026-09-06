@@ -7,18 +7,20 @@ data-structure choice. It should evolve with the implementation.
 
 ```text
 main.cpp
-  ├── creates deterministic incident-index scenarios
+  ├── creates deterministic event-retry scenarios
   ├── reports operation results
-  └── calls incident-index operations ──► IncidentIndex
-                                              │
-                                              ▼
-                              std::unordered_map<int, Incident>
+  └── calls deduplication operations ──► EventDeduplicator
+                                               │
+                                               ▼
+                                  std::unordered_set<int>
 ```
 
 - `include/dispatchiq/incident.hpp` defines the `Incident` model and public operation contracts.
 - `src/incident.cpp` owns validation, duplicate checking, searching, and registry presentation.
 - `include/dispatchiq/emergency_call.hpp` defines the intake model and queue-operation contracts.
 - `src/emergency_call.cpp` owns call validation, FIFO insertion, peeking, processing, and counting.
+- `include/dispatchiq/event_deduplicator.hpp` defines processed-event state and contracts.
+- `src/event_deduplicator.cpp` owns event validation, insertion, lookup, removal, and counting.
 - `include/dispatchiq/incident_triage.hpp` defines triage entries, ordering, state, and contracts.
 - `src/incident_triage.cpp` owns severity ordering, arrival tie-breaking, peeking, and dispatching.
 - `include/dispatchiq/incident_index.hpp` defines the active incident index and its contracts.
@@ -117,8 +119,9 @@ triage milestone and will use `std::priority_queue`.
 after `processNextCall` removes the element or after the queue is destroyed.
 
 The intake functions reject severities outside 1 through 5 and leave the queue unchanged after a
-rejection. Duplicate call IDs are intentionally deferred until the `std::unordered_set` milestone
-because a queue does not provide a natural search operation.
+rejection. DIQ-005 provides a separate `std::unordered_set` deduplicator, but it is not yet wired
+into call intake. A queue does not provide a natural membership operation, so integration must
+coordinate the queue and deduplicator as one workflow.
 
 ## Incident triage
 
@@ -193,20 +196,58 @@ map is replaced.
 The index currently owns copies independently from the vector registry and priority triage.
 Coordinating those views behind one workflow is deferred until the application layer is expanded.
 
+## Event deduplication
+
+External systems may deliver an event repeatedly when a sender retries after a timeout.
+`EventDeduplicator` records the integer ID of each processed event so DispatchIQ can distinguish
+a new event from a retry without storing a second copy of the event payload.
+
+### Container decision: `std::unordered_set`
+
+The deduplicator uses `std::unordered_set<int>` because it:
+
+- stores each event ID at most once;
+- answers membership questions without an associated mapped value;
+- detects duplicates as part of insertion; and
+- supports average constant-time insertion, lookup, removal, and counting.
+
+An unordered set is preferable to an unordered map here because the deduplication decision needs
+only the event ID. If DispatchIQ later needs metadata such as processing time or source system,
+the component can be redesigned around a map.
+
+| Operation | Average | Worst case | Behavior |
+|---|---:|---:|---|
+| Record event | O(1) | O(n) | Inserts a positive ID and reports whether it was new |
+| Check event | O(1) | O(n) | Uses C++20 `contains` to test membership |
+| Forget event | O(1) | O(n) | Erases one ID and reports whether it existed |
+| Count events | O(1) | O(1) | Returns the number of tracked IDs |
+
+`recordEvent` rejects zero and negative IDs before insertion. A positive duplicate returns
+`false` and leaves the set unchanged. `hasProcessedEvent` and `forgetEvent` also return
+`false` for non-positive IDs.
+
+`forgetEvent` deliberately allows an ID to be processed again. This models a controlled replay
+or expiration operation; production integration would restrict when that operation is permitted.
+The current component has no retention window, persistence, or automatic expiration policy.
+
+Hash-table iteration order is unspecified, and no deduplication behavior depends on it. The
+`processedEventIds` member is currently public to match the project's simple state-object
+pattern, although callers should use the operation functions so validation is not bypassed.
+
 ## Validation and error reporting
 
 The current milestones validate registry incidents, indexed incidents, emergency calls, and
-triage incidents by severity. The vector registry and hash index also enforce incident ID
-uniqueness. Coordinate bounds, emergency-call and triage ID uniqueness, and category rules are
-not yet enforced. Boolean results keep the first APIs simple but cannot distinguish rejection
-reasons. A later milestone can introduce result enums without coupling domain logic to console
-output.
+triage incidents by severity. The vector registry and hash index enforce incident ID uniqueness,
+and the event deduplicator accepts only positive, previously unseen event IDs. Coordinate bounds,
+emergency-call and triage ID uniqueness, and category rules are not yet enforced. Boolean results
+keep the first APIs simple but cannot distinguish rejection reasons. A later milestone can
+introduce result enums without coupling domain logic to console output.
 
 ## Growth path
 
 The architecture will expand one behavior at a time:
 
-1. Hash-based sets will detect repeated intake events.
-2. Ordered containers will support stable operational reports.
-3. `std::list` will support frequently edited routes, and `std::stack` will support undo.
+1. Ordered containers will support stable operational reports.
+2. `std::list` will support frequently edited routes.
+3. `std::stack` will support undo.
 4. Persistence, automated tests, and benchmarks will harden the completed simulator.
