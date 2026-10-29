@@ -21,6 +21,8 @@ add_executable(dispatchiq
     src/incident_index.cpp
     include/dispatchiq/event_deduplicator.hpp
     src/event_deduplicator.cpp
+    include/dispatchiq/operations_report.hpp
+    src/operations_report.cpp
 )
 
 target_compile_features(dispatchiq PRIVATE cxx_std_20)
